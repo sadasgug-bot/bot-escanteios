@@ -1,0 +1,8 @@
+services:
+  - type: worker
+    name: bot-escanteios
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot_escanteios.py
+    branch: main

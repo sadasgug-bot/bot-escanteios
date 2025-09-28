@@ -5,8 +5,6 @@ from datetime import datetime
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-@@ -12,48 +13,221 @@
-
 TOKEN = "8443274539:AAEZ_jfLKLAHjTquzS9Z650Xn4_-ZwTlrnI"
 
 # Armazenamento

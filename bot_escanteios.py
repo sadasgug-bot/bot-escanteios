@@ -1,4 +1,3 @@
-import os
 import logging
 import requests
 from flask import Flask, request, abort
@@ -7,21 +6,16 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 
 # ————————————— Configurações iniciais —————————————
 
-# Pega token do ambiente
-TOKEN = os.getenv("BOT_TOKEN")
+# Token fixo no código (não recomendado para produção)
+TOKEN = "8443274539:AAE-OZWtG_oqwOF3UEKNIS-UvcNsL1EC2ys"
 
-if not TOKEN:
-    raise ValueError("🔴 BOT_TOKEN não definido — configure nas variáveis de ambiente")
+# Porta padrão (usada pelo Render)
+PORT = 8000
 
-# Porta padrão (Render costuma define via variável PORT)
-PORT = int(os.getenv("PORT", "8000"))
+# Hostname definido pelo Render (você pode trocar pelo seu domínio público, se tiver)
+HOSTNAME = "SEU_HOST.render.com"  # <-- troque aqui pelo seu domínio Render
 
-WEBHOOK_PATH = "/webhook"  # caminho do endpoint
-# Construir URL completa do webhook (Render disponibiliza hostname via variável)
-HOSTNAME = os.getenv("RENDER_EXTERNAL_HOSTNAME")
-if not HOSTNAME:
-    raise ValueError("🔴 RENDER_EXTERNAL_HOSTNAME não definido — essencial para webhook URL")
-
+WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = f"https://{HOSTNAME}{WEBHOOK_PATH}"
 
 # Logging
@@ -33,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# Cria aplicação Telegram
+# Cria a aplicação do Telegram
 application = Application.builder().token(TOKEN).build()
 
 # ————————————— Comandos do bot —————————————
@@ -48,8 +42,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 application.add_handler(CommandHandler("start", start))
 
-# Você pode adicionar outros comandos como /estrategia, etc
-
 # ————————————— Webhook endpoint —————————————
 
 @app.route(WEBHOOK_PATH, methods=["POST"])
@@ -61,16 +53,16 @@ def webhook():
     else:
         abort(400)
 
-# ————————————— Função para setar webhook no Telegram —————————————
+# ————————————— Função para configurar o webhook no Telegram —————————————
 
 def set_webhook():
     logger.info(f"Definindo webhook: {WEBHOOK_URL}")
     url = f"https://api.telegram.org/bot{TOKEN}/setWebhook?url={WEBHOOK_URL}"
     resp = requests.get(url)
     if resp.status_code == 200:
-        logger.info("Webhook definido com sucesso!")
+        logger.info("✅ Webhook definido com sucesso!")
     else:
-        logger.error(f"Falha ao definir webhook: {resp.status_code} — {resp.text}")
+        logger.error(f"❌ Falha ao definir webhook: {resp.status_code} — {resp.text}")
 
 # ————————————— Execução principal —————————————
 

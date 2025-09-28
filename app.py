@@ -1,3 +1,4 @@
+from opta_integration import OptaStats
 from flask import Flask, request, jsonify
 from football_api import FootballAPI
 from telegram_bot import TelegramBot

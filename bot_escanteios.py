@@ -5,10 +5,19 @@ from datetime import datetime
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
+# Configuração de logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
 TOKEN = "8443274539:AAEZ_jfLKLAHjTquzS9Z650Xn4_-ZwTlrnI"
 
 # Armazenamento
 usuarios = []
+
+# /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id not in usuarios:
@@ -20,6 +29,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🔔 Alertas automáticos em breve\n"
         "⚡ Versão estável configurada\n\n"
         "_Digite /teste para ver exemplo_",
+        parse_mode='Markdown'
+    )
+    
+    await update.message.reply_text(
         "🤖 *BOT DE ESCANTEIOS - ESTRATÉGIA ATUALIZADA!* 🚀\n\n"
         "🎯 **NOVAS CONDIÇÕES:**\n"
         "• 📊 Análise por xG (Expected Goals)\n"
@@ -36,13 +49,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     logger.info(f"Usuário {update.effective_user.id} iniciou o bot")
 
+# /teste
 async def teste(update: Update, context: ContextTypes.DEFAULT_TYPE):
-async def estrategia(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🔔 *ALERTA TESTE - SISTEMA OPERACIONAL* ⚽\n\n"
         "✅ Bot respondendo corretamente\n"
         "🎯 Próximo passo: alertas automáticos\n"
         "⚡ Render.com + Telegram integrados",
+        parse_mode='Markdown'
+    )
+
+# /estrategia
+async def estrategia(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
         "📋 **ESTRATÉGIA DETALHADA** ⚽\n\n"
         "🎯 **OBJETIVO:** Identificar times pressionando baseado em xG\n\n"
         "🔔 ALERTA 1º TEMPO (0-30min):\n"
@@ -62,7 +81,6 @@ async def estrategia(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # SIMULADOR DE DADOS COM XG
 def simular_partidas_com_xg():
     """Simula partidas com dados de xG"""
-    from datetime import datetime
     agora = datetime.now()
     minuto_atual = agora.minute
     
@@ -104,6 +122,7 @@ def simular_partidas_com_xg():
         })
     
     return partidas
+
 # VERIFICAR CONDIÇÕES DA NOVA ESTRATÉGIA
 def analisar_oportunidade(partida):
     """Analisa se a partida atende às novas condições"""
@@ -112,38 +131,26 @@ def analisar_oportunidade(partida):
     if partida['tipo'] == '1t' and partida['minuto'] <= 30:
         condicoes = []
         
-        # +5 escanteios até 30min
         if partida['escanteios'] >= 5:
             condicoes.append("✅ +5 escanteios até 30min")
         
-        # xG > 0.50 para favorito perdendo/empatando
-        time_favorito_pressionando = (
-            (partida['placar_casa'] <= partida['placar_visitante']) and 
-            partida['xg_casa'] > 0.50
-        )
-        
-        if time_favorito_pressionando:
+        if (partida['placar_casa'] <= partida['placar_visitante']) and partida['xg_casa'] > 0.50:
             condicoes.append(f"✅ xG: {partida['xg_casa']} > 0.50")
         
-        return len(condicoes) == 1, condicoes
+        return len(condicoes) >= 1, condicoes  # <- ATENDENDO PELO MENOS 1 CONDIÇÃO
     
     # ALERTA FINAL (70+min)
     elif partida['tipo'] == '2t' and partida['minuto'] >= 70:
         condicoes = []
         
-        # xG > 1.50 para favorito perdendo/empatando
-        time_favorito_pressionando = (
-            (partida['placar_casa'] <= partida['placar_visitante']) and 
-            partida['xg_casa'] > 1.50
-        )
-        
-        if time_favorito_pressionando:
+        if (partida['placar_casa'] <= partida['placar_visitante']) and partida['xg_casa'] > 1.50:
             condicoes.append(f"✅ xG: {partida['xg_casa']} > 1.50")
             condicoes.append("✅ Favorito perdendo/empatando")
         
-        return len(condicoes) == 1, condicoes
+        return len(condicoes) >= 1, condicoes  # <- ATENDENDO PELO MENOS 1 CONDIÇÃO
     
     return False, []
+
 # ALERTAS AUTOMÁTICOS
 async def alertas_estrategia_xg(context: ContextTypes.DEFAULT_TYPE):
     """Alertas baseados na nova estratégia com xG"""
@@ -182,7 +189,6 @@ async def alertas_estrategia_xg(context: ContextTypes.DEFAULT_TYPE):
 {chr(10).join(condicoes)}
 ⚡ OPORTUNIDADE: +0.5 escanteios (aposta simples)
 """
-                
                 for user_id in usuarios:
                     try:
                         await context.bot.send_message(
@@ -198,18 +204,16 @@ async def alertas_estrategia_xg(context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         logger.error(f"❌ Erro na estratégia xG: {e}")
+
+# MAIN
 def main():
     try:
-        # Criar aplicação
         application = Application.builder().token(TOKEN).build()
 
-        # Adicionar comandos
-        # Comandos
         application.add_handler(CommandHandler("start", start))
         application.add_handler(CommandHandler("teste", teste))
         application.add_handler(CommandHandler("estrategia", estrategia))
         
-        # Alertas a cada 7 minutos
         job_queue = application.job_queue
         job_queue.run_repeating(alertas_estrategia_xg, interval=420, first=10)
 
@@ -226,13 +230,11 @@ def main():
         print("🔔 Alertas baseados em criação real de chances")
         print("=" * 60)
 
-        # Iniciar bot
         application.run_polling()
 
     except Exception as e:
         logger.error(f"❌ Erro ao iniciar bot: {e}")
         print(f"ERRO CRÍTICO: {e}")
-        logger.error(f"Erro: {e}")
 
 if __name__ == '__main__':
     main()

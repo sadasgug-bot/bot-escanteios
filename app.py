@@ -72,21 +72,21 @@ def calculate_estimated_odds(home_team, away_team):
     Calcula odds estimadas baseadas em estatísticas dos times - SIMULA BET365
     """
     try:
-        # Odds base
-        base_odds = 1.35
+        # Odds base mais realista
+        base_odds = 1.32
         
         # Times ofensivos brasileiros → mais escanteios → odds mais baixas
         offensive_teams = [
             'flamengo', 'palmeiras', 'botafogo', 'grêmio', 'atlético-mg', 
             'são paulo', 'corinthians', 'internacional', 'fluminense', 'red bull',
-            'fortaleza', 'athletico', 'cruzeiro', 'vasco', 'bahia'
+            'fortaleza', 'athletico', 'cruzeiro', 'vasco', 'bahia', 'bragantino'
         ]
         
         # Times muito ofensivos → odds ainda mais baixas
-        very_offensive_teams = ['flamengo', 'palmeiras', 'botafogo', 'grêmio', 'são paulo']
+        very_offensive_teams = ['flamengo', 'palmeiras', 'botafogo', 'grêmio', 'são paulo', 'bragantino']
         
         # Times defensivos → menos escanteios → odds mais altas
-        defensive_teams = ['cuiabá', 'juventude', 'goiás', 'coritiba', 'américa-mg']
+        defensive_teams = ['cuiabá', 'juventude', 'goiás', 'coritiba', 'américa-mg', 'atlético-go']
         
         home_lower = home_team.lower()
         away_lower = away_team.lower()
@@ -99,39 +99,44 @@ def calculate_estimated_odds(home_team, away_team):
         home_defensive = any(team in home_lower for team in defensive_teams)
         away_defensive = any(team in away_lower for team in defensive_teams)
         
-        # Lógica de ajuste de odds
+        # Lógica de ajuste de odds (MAIS CONSERVADORA)
+        adjustments = 0.0
+        
         if home_very_offensive and away_very_offensive:
-            base_odds -= 0.12  # Jogo entre dois times ofensivos
+            adjustments -= 0.10  # Jogo entre dois times ofensivos
         elif home_very_offensive or away_very_offensive:
-            base_odds -= 0.08  # Pelo menos um time muito ofensivo
+            adjustments -= 0.06  # Pelo menos um time muito ofensivo
         elif home_offensive and away_offensive:
-            base_odds -= 0.06  # Dois times ofensivos
+            adjustments -= 0.04  # Dois times ofensivos
         elif home_offensive or away_offensive:
-            base_odds -= 0.04  # Pelo menos um time ofensivo
+            adjustments -= 0.02  # Pelo menos um time ofensivo
         
         # Times defensivos aumentam as odds
         if home_defensive and away_defensive:
-            base_odds += 0.10  # Dois times defensivos
+            adjustments += 0.08  # Dois times defensivos
         elif home_defensive or away_defensive:
-            base_odds += 0.05  # Pelo menos um time defensivo
+            adjustments += 0.04  # Pelo menos um time defensivo
         
         # Derbys e jogos importantes tendem a ter mais escanteios
         derby_keywords = ['fla-flu', 'flamengo-fluminense', 'cor-fra', 'corinthians-palmeiras', 
-                         'gre-nal', 'grêmio-internacional', 'atlético-cruzeiro']
+                         'gre-nal', 'grêmio-internacional', 'atlético-cruzeiro', 'clássico']
         
-        match_name_lower = f"{home_lower} {away_lower}".lower()
+        match_name_lower = f"{home_lower}-{away_lower}".lower()
         if any(derby in match_name_lower for derby in derby_keywords):
-            base_odds -= 0.05
+            adjustments -= 0.03
         
-        # Garante limites realistas (entre 1.15 e 1.60)
-        final_odds = max(1.15, min(1.60, round(base_odds, 2)))
+        # Aplica ajustes
+        final_odds = base_odds + adjustments
+        
+        # Garante limites realistas (entre 1.18 e 1.55)
+        final_odds = max(1.18, min(1.55, round(final_odds, 2)))
         
         print(f"🎯 Odds calculadas para {home_team} vs {away_team}: {final_odds}")
         return final_odds
         
     except Exception as e:
         print(f"❌ Erro ao calcular odds: {e}")
-        return 1.35  # Fallback
+        return 1.32  # Fallback
 
 def get_corner_odds(match_data, odds_data=None):
     """Busca odds de escanteios - SIMULA BET365"""
@@ -156,7 +161,7 @@ def get_corner_odds(match_data, odds_data=None):
         
     except Exception as e:
         print(f"❌ Erro ao buscar odds: {e}")
-        return 1.35  # Fallback
+        return 1.32  # Fallback
 
 def is_favorite_pressing(match_data, statistics):
     """Verifica se time favorito está pressionando"""
@@ -170,8 +175,6 @@ def is_favorite_pressing(match_data, statistics):
         minute = fixture.get('status', {}).get('elapsed', 0)
         
         # Considera o time da casa como favorito (simplificação)
-        # Em jogos reais, você pode implementar lógica mais complexa
-        
         # Se está no primeiro tempo e perdendo/empatando
         if fixture_status == '1H' and minute >= 20:  # A partir do 20º minuto
             if home_goals <= away_goals:

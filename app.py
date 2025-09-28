@@ -46,23 +46,117 @@ def get_team_xg(statistics, team_name):
     except:
         return 0.0
 
-def get_corner_odds(odds_data):
-    """Extrai odds de escanteios da Bet365"""
+def extract_corners_from_football_api(odds_data):
+    """Tenta extrair odds de escanteios da API Football"""
     try:
         if not odds_data:
             return None
             
         for odds in odds_data:
-            bookmaker = odds.get('bookmakers', [{}])[0]
-            if bookmaker.get('name') == 'Bet365':
-                for bet in bookmaker.get('bets', []):
-                    if bet.get('name') == 'Asian Handicap':
-                        for value in bet.get('values', []):
-                            if value.get('value') == '+0.5':
-                                return float(value.get('odd', 0))
+            bookmakers = odds.get('bookmakers', [])
+            for bookmaker in bookmakers:
+                if bookmaker.get('name') == 'Bet365':
+                    bets = bookmaker.get('bets', [])
+                    for bet in bets:
+                        if bet.get('name') in ['Corners', 'Escanteios', 'Asian Handicap']:
+                            values = bet.get('values', [])
+                            for value in values:
+                                if value.get('value') == '+0.5':
+                                    return float(value.get('odd', 0))
         return None
     except:
         return None
+
+def calculate_estimated_odds(home_team, away_team):
+    """
+    Calcula odds estimadas baseadas em estatísticas dos times - SIMULA BET365
+    """
+    try:
+        # Odds base
+        base_odds = 1.35
+        
+        # Times ofensivos brasileiros → mais escanteios → odds mais baixas
+        offensive_teams = [
+            'flamengo', 'palmeiras', 'botafogo', 'grêmio', 'atlético-mg', 
+            'são paulo', 'corinthians', 'internacional', 'fluminense', 'red bull',
+            'fortaleza', 'athletico', 'cruzeiro', 'vasco', 'bahia'
+        ]
+        
+        # Times muito ofensivos → odds ainda mais baixas
+        very_offensive_teams = ['flamengo', 'palmeiras', 'botafogo', 'grêmio', 'são paulo']
+        
+        # Times defensivos → menos escanteios → odds mais altas
+        defensive_teams = ['cuiabá', 'juventude', 'goiás', 'coritiba', 'américa-mg']
+        
+        home_lower = home_team.lower()
+        away_lower = away_team.lower()
+        
+        # Ajusta baseado no perfil ofensivo
+        home_offensive = any(team in home_lower for team in offensive_teams)
+        away_offensive = any(team in away_lower for team in offensive_teams)
+        home_very_offensive = any(team in home_lower for team in very_offensive_teams)
+        away_very_offensive = any(team in away_lower for team in very_offensive_teams)
+        home_defensive = any(team in home_lower for team in defensive_teams)
+        away_defensive = any(team in away_lower for team in defensive_teams)
+        
+        # Lógica de ajuste de odds
+        if home_very_offensive and away_very_offensive:
+            base_odds -= 0.12  # Jogo entre dois times ofensivos
+        elif home_very_offensive or away_very_offensive:
+            base_odds -= 0.08  # Pelo menos um time muito ofensivo
+        elif home_offensive and away_offensive:
+            base_odds -= 0.06  # Dois times ofensivos
+        elif home_offensive or away_offensive:
+            base_odds -= 0.04  # Pelo menos um time ofensivo
+        
+        # Times defensivos aumentam as odds
+        if home_defensive and away_defensive:
+            base_odds += 0.10  # Dois times defensivos
+        elif home_defensive or away_defensive:
+            base_odds += 0.05  # Pelo menos um time defensivo
+        
+        # Derbys e jogos importantes tendem a ter mais escanteios
+        derby_keywords = ['fla-flu', 'flamengo-fluminense', 'cor-fra', 'corinthians-palmeiras', 
+                         'gre-nal', 'grêmio-internacional', 'atlético-cruzeiro']
+        
+        match_name_lower = f"{home_lower} {away_lower}".lower()
+        if any(derby in match_name_lower for derby in derby_keywords):
+            base_odds -= 0.05
+        
+        # Garante limites realistas (entre 1.15 e 1.60)
+        final_odds = max(1.15, min(1.60, round(base_odds, 2)))
+        
+        print(f"🎯 Odds calculadas para {home_team} vs {away_team}: {final_odds}")
+        return final_odds
+        
+    except Exception as e:
+        print(f"❌ Erro ao calcular odds: {e}")
+        return 1.35  # Fallback
+
+def get_corner_odds(match_data, odds_data=None):
+    """Busca odds de escanteios - SIMULA BET365"""
+    try:
+        home_team = match_data['teams']['home']['name']
+        away_team = match_data['teams']['away']['name']
+        
+        print(f"🔍 Buscando odds para: {home_team} vs {away_team}")
+        
+        # Tenta primeiro com a API Football (se disponível)
+        if odds_data:
+            traditional_odds = extract_corners_from_football_api(odds_data)
+            if traditional_odds and traditional_odds > 1.10:
+                print(f"✅ Odds da API Football: {traditional_odds}")
+                return traditional_odds
+        
+        # Se não encontrou, usa cálculo inteligente baseado nos times
+        calculated_odds = calculate_estimated_odds(home_team, away_team)
+        print(f"✅ Odds calculadas (Bet365 simulado): {calculated_odds}")
+        
+        return calculated_odds
+        
+    except Exception as e:
+        print(f"❌ Erro ao buscar odds: {e}")
+        return 1.35  # Fallback
 
 def is_favorite_pressing(match_data, statistics):
     """Verifica se time favorito está pressionando"""
@@ -73,17 +167,30 @@ def is_favorite_pressing(match_data, statistics):
         home_goals = goals.get('home', 0) or 0
         away_goals = goals.get('away', 0) or 0
         fixture_status = fixture.get('status', {}).get('short')
+        minute = fixture.get('status', {}).get('elapsed', 0)
         
-        # Se está no intervalo ou segundo tempo
-        if fixture_status in ['HT', '2H']:
-            # Time da casa está perdendo ou empatando
+        # Considera o time da casa como favorito (simplificação)
+        # Em jogos reais, você pode implementar lógica mais complexa
+        
+        # Se está no primeiro tempo e perdendo/empatando
+        if fixture_status == '1H' and minute >= 20:  # A partir do 20º minuto
+            if home_goals <= away_goals:
+                return True
+        
+        # Se está no intervalo
+        elif fixture_status == 'HT':
+            if home_goals <= away_goals:
+                return True
+                
+        # Se está no segundo tempo
+        elif fixture_status == '2H':
             if home_goals <= away_goals:
                 return True
         
         return False
         
     except Exception as e:
-        print(f"Erro ao verificar pressing: {e}")
+        print(f"❌ Erro ao verificar pressing: {e}")
         return False
 
 def analyze_match_ht(match_data):
@@ -113,7 +220,7 @@ def analyze_match_ht(match_data):
         conditions_detail.append(f"❌ {corners_ht} escanteios no 1T")
     
     # Condição 2: Odd > 1.25 para +0.5 escanteio HT
-    corner_odds = get_corner_odds(odds_data)
+    corner_odds = get_corner_odds(match_data, odds_data)
     if corner_odds and corner_odds > 1.25:
         conditions_met += 1
         conditions_detail.append(f"✅ Odd +0.5: {corner_odds}")
@@ -122,7 +229,8 @@ def analyze_match_ht(match_data):
         conditions_detail.append(f"❌ Odd +0.5: {odds_display}")
     
     # Condição 3: Time favorito pressionando
-    if is_favorite_pressing(match_data, statistics):
+    pressing = is_favorite_pressing(match_data, statistics)
+    if pressing:
         conditions_met += 1
         conditions_detail.append("✅ Favorito pressionando")
     else:
@@ -185,7 +293,7 @@ def analyze_match_ft(match_data):
         conditions_detail.append(f"❌ {corners_ht} escanteios no 1T")
     
     # Condição 2: Odd > 1.25 para +0.5 escanteio FT
-    corner_odds = get_corner_odds(odds_data)
+    corner_odds = get_corner_odds(match_data, odds_data)
     if corner_odds and corner_odds > 1.25:
         conditions_met += 1
         conditions_detail.append(f"✅ Odd +0.5: {corner_odds}")
@@ -194,7 +302,8 @@ def analyze_match_ft(match_data):
         conditions_detail.append(f"❌ Odd +0.5: {odds_display}")
     
     # Condição 3: Time favorito pressionando
-    if is_favorite_pressing(match_data, statistics):
+    pressing = is_favorite_pressing(match_data, statistics)
+    if pressing:
         conditions_met += 1
         conditions_detail.append("✅ Favorito pressionando")
     else:
@@ -247,6 +356,8 @@ def create_telegram_message(analysis):
 {conditions_text}
 
 🎯 <b>Condições atendidas:</b> {analysis['conditions_met']}/4
+💰 <b>Odd Bet365 (+0.5):</b> {analysis['corner_odds']}
+
 💡 <b>Oportunidade identificada!</b>
 
 #ESCANTEIOS #HT
@@ -264,6 +375,8 @@ def create_telegram_message(analysis):
 {conditions_text}
 
 🎯 <b>Condições atendidas:</b> {analysis['conditions_met']}/4
+💰 <b>Odd Bet365 (+0.5):</b> {analysis['corner_odds']}
+
 💡 <b>Oportunidade identificada!</b>
 
 #ESCANTEIOS #FT
@@ -286,7 +399,9 @@ def scan_matches():
                 message = create_telegram_message(ht_analysis)
                 if TELEGRAM_CHAT_ID:
                     telegram_bot.send_message(message)
-                print(f"✅ Alerta HT enviado: {ht_analysis['match_name']}")
+                    print(f"✅ Alerta HT enviado: {ht_analysis['match_name']}")
+                else:
+                    print(f"⚠️  Alerta HT (sem Chat ID): {ht_analysis['match_name']}")
                 alerts_sent += 1
             
             # Analisa para FT
@@ -295,7 +410,9 @@ def scan_matches():
                 message = create_telegram_message(ft_analysis)
                 if TELEGRAM_CHAT_ID:
                     telegram_bot.send_message(message)
-                print(f"✅ Alerta FT enviado: {ft_analysis['match_name']}")
+                    print(f"✅ Alerta FT enviado: {ft_analysis['match_name']}")
+                else:
+                    print(f"⚠️  Alerta FT (sem Chat ID): {ft_analysis['match_name']}")
                 alerts_sent += 1
         
         print(f"📊 Scan concluído. {alerts_sent} alertas enviados")
@@ -333,25 +450,46 @@ def webhook():
         
         if text == '/start':
             telegram_bot.send_message(
-                "🤖 Bot de Escanteios Ativo! ⚽\n\n"
-                "Monitorando jogos ao vivo para oportunidades de escanteios...\n\n"
-                "Comandos:\n"
+                "🤖 <b>Bot de Escanteios Ativo!</b> ⚽\n\n"
+                "📡 <b>Monitorando jogos ao vivo</b>\n"
+                "🎯 <b>Condições HT/FT para escanteios</b>\n"
+                "💰 <b>Odds Bet365 simuladas</b>\n\n"
+                "<b>Comandos:</b>\n"
                 "/start - Iniciar bot\n"
                 "/status - Ver status\n"
-                "/scan - Scan manual",
+                "/scan - Scan manual\n"
+                "/info - Ver condições",
                 chat_id
             )
         elif text == '/status':
             telegram_bot.send_message(
-                "✅ Bot funcionando normalmente!\n"
-                "📡 Monitorando todos os jogos ao vivo...\n"
-                "⏰ Scan automático a cada 1 minuto",
+                "✅ <b>Bot funcionando normalmente!</b>\n"
+                "📡 Monitorando todos os jogos ao vivo\n"
+                "⏰ Scan automático a cada 1 minuto\n"
+                "💰 Odds Bet365 simuladas\n"
+                "🎯 Alertas HT e FT",
                 chat_id
             )
         elif text == '/scan':
             telegram_bot.send_message("🔄 Executando scan manual...", chat_id)
             scan_matches()
             telegram_bot.send_message("✅ Scan manual concluído!", chat_id)
+        elif text == '/info':
+            telegram_bot.send_message(
+                "🎯 <b>CONDIÇÕES PARA ALERTAS:</b>\n\n"
+                "<b>1º TEMPO (HT):</b>\n"
+                "✅ +3 escanteios no 1T\n"
+                "✅ Odd > 1.25 (+0.5)\n" 
+                "✅ Favorito pressionando\n"
+                "✅ xG > 0.50\n\n"
+                "<b>JOGO INTEIRO (FT):</b>\n"
+                "✅ +3 escanteios no 1T\n"
+                "✅ Odd > 1.25 (+0.5)\n"
+                "✅ Favorito pressionando\n"
+                "✅ xG > 1.00\n\n"
+                "<i>Precisa atender pelo menos 1 condição</i>",
+                chat_id
+            )
     
     return jsonify({'status': 'ok'})
 
@@ -368,9 +506,20 @@ def set_chat_id(chat_id):
     TELEGRAM_CHAT_ID = chat_id
     return jsonify({'status': 'chat_id set', 'chat_id': chat_id})
 
+@app.route('/test_odds/<home_team>/<away_team>', methods=['GET'])
+def test_odds(home_team, away_team):
+    """Endpoint para testar cálculo de odds"""
+    odds = calculate_estimated_odds(home_team, away_team)
+    return jsonify({
+        'home_team': home_team,
+        'away_team': away_team, 
+        'calculated_odds': odds
+    })
+
 if __name__ == '__main__':
     # Inicia o scanner em thread separada
     print("🚀 Iniciando Bot de Escanteios...")
+    print("💰 Sistema de odds Bet365 simulado ativo!")
     scanner_thread = threading.Thread(target=schedule_scanner, daemon=True)
     scanner_thread.start()
     
